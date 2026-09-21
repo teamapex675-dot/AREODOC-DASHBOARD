@@ -1,24 +1,3 @@
-Here is the complete fix! The issue was caused by light-gray text colors blending into the bright white background. 
-
-I have updated the colors to **high-contrast dark slate (`#0F172A` and `#1E293B`)** with bold, crisp text, so every metric, chart, label, and alert is crystal clear and easy to read.
-
----
-
-### 🛠️ How to apply the fix (1 Minute):
-
-1. Go to your GitHub repository: `github.com/YOUR_USERNAME/aerotwin-dashboard`
-2. Click on **`app.py`**
-3. Click the **Pencil icon** (✏️) in the top-right to edit.
-4. **Select all (`Ctrl + A` or `Cmd + A`) and delete everything.**
-5. **Copy and paste the entire updated code below.**
-6. Click **"Commit changes..."** ➔ **"Commit changes"**.
-7. Streamlit Cloud will auto-refresh in ~10 seconds with dark, crisp, readable fonts! 🚀
-
----
-
-### 👇 Copy ALL of this updated code for `app.py`:
-
-```python
 import streamlit as st
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
@@ -41,24 +20,18 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# ============================================================
-# HIGH CONTRAST EYE-SOOTHING CLEAN THEME CSS
-# ============================================================
+# High contrast styling
 st.markdown("""
 <style>
-    /* Main Background */
     .stApp { 
         background-color: #F8FAFC !important; 
         color: #0F172A !important;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     }
     
-    /* Text & Headings */
     h1, h2, h3, h4, h5, h6, p, span, label, div {
         color: #0F172A !important;
     }
 
-    /* Sidebar */
     [data-testid="stSidebar"] {
         background-color: #FFFFFF !important;
         border-right: 2px solid #E2E8F0 !important;
@@ -67,7 +40,6 @@ st.markdown("""
         color: #0F172A !important;
     }
 
-    /* Metric Cards */
     [data-testid="stMetric"] {
         background: #FFFFFF !important; 
         border: 1.5px solid #CBD5E1 !important;
@@ -88,7 +60,6 @@ st.markdown("""
         font-size: 1.7rem !important;
     }
 
-    /* Tabs */
     .stTabs [data-baseweb="tab-list"] {
         gap: 8px; 
         background: #FFFFFF; 
@@ -111,7 +82,6 @@ st.markdown("""
         color: #FFFFFF !important;
     }
 
-    /* Cards */
     .health-card {
         background: #FFFFFF !important; 
         border-radius: 16px !important; 
@@ -154,7 +124,6 @@ st.markdown("""
         border-bottom: 2px solid #E2E8F0 !important;
     }
 
-    /* Alerts with High Contrast Text */
     .alert-card {
         border-radius: 10px !important; 
         padding: 14px 18px !important; 
@@ -202,7 +171,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ============================================================
-# DOMAIN MODELS & ENUMS
+# DOMAIN MODELS
 # ============================================================
 class FaultType(Enum):
     HEALTHY = "Healthy (Nominal Operation)"
@@ -395,7 +364,7 @@ class AIEngine:
         else: return "CRITICAL"
 
 # ============================================================
-# HIGH CONTRAST CHARTS
+# CHARTS
 # ============================================================
 def gauge(val, title):
     c = "#059669" if val>=90 else "#D97706" if val>=75 else "#EA580C" if val>=60 else "#DC2626"
@@ -492,7 +461,7 @@ def radar_chart(s, e):
     return fig
 
 # ============================================================
-# MAIN APPLICATION
+# MAIN
 # ============================================================
 def main():
     with st.sidebar:
@@ -544,13 +513,11 @@ def main():
         hh.append(ai.health(ai.residuals(ts)))
     hdf['health'] = hh
 
-    # Main Dashboard Header
     st.markdown('<div style="text-align:center;padding:5px 0 15px 0;">'
         '<h1 style="color:#0F172A;font-weight:900;font-size:2rem;margin-bottom:2px;">🚁 Aero Piston Engine Digital Twin</h1>'
         '<p style="color:#334155;font-weight:600;font-size:1rem;">Real-Time Health Monitoring • Physics Residuals • AI Diagnostics</p></div>',
         unsafe_allow_html=True)
 
-    # Status Bar
     rc = {'LOW':'#059669','MEDIUM':'#D97706','HIGH':'#EA580C','CRITICAL':'#DC2626'}
     rb = {'LOW':'#ECFDF5','MEDIUM':'#FEFCE8','HIGH':'#FFF7ED','CRITICAL':'#FEF2F2'}
     re = {'LOW':'🟢','MEDIUM':'🟡','HIGH':'🟠','CRITICAL':'🔴'}
@@ -563,7 +530,6 @@ def main():
 
     t1, t2, t3, t4, t5 = st.tabs(["👨‍✈️ Pilot View","👨‍🔧 Engineer View","🧬 Digital Twin","🛫 Mission Risk","🔁 Replay"])
 
-    # 👨‍✈️ PILOT TAB
     with t1:
         c1,c2,c3 = st.columns([1.2,1,1])
         with c1:
@@ -588,7 +554,6 @@ def main():
             st.metric("Flight Altitude", f"{alt:,} ft")
             st.markdown('</div>', unsafe_allow_html=True)
 
-    # 👨‍🔧 ENGINEER TAB
     with t2:
         m1,m2,m3,m4,m5,m6 = st.columns(6)
         m1.metric("RPM", f"{state.rpm:.0f}", f"{state.rpm-exp['rpm']:+.0f}")
@@ -618,7 +583,6 @@ def main():
             st.plotly_chart(ts_chart(hdf,['oil_pressure','oil_temperature'],'Lubrication System Dynamics','Value'), use_container_width=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
-    # 🧬 DIGITAL TWIN TAB
     with t3:
         dt1, dt2 = st.columns(2)
         with dt1:
@@ -633,7 +597,6 @@ def main():
                 '3. <b>AI Anomaly Classifier:</b> Evaluates multi-parameter residual patterns to identify incipient faults before threshold alerts are triggered.'
                 '</p></div>', unsafe_allow_html=True)
 
-    # 🛫 MISSION RISK TAB
     with t4:
         mr1, mr2 = st.columns(2)
         with mr1:
@@ -662,7 +625,6 @@ def main():
                 st.markdown('<div class="alert-card alert-green">✅ <b>Extension Safe:</b> Engine degradation remains within acceptable risk tolerance.</div>', unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
-    # 🔁 REPLAY TAB
     with t5:
         st.markdown('<div class="info-box"><p class="section-header">🛫 Mission Timeline & Anomaly Detection Replay</p>', unsafe_allow_html=True)
         pf = make_subplots(rows=2,cols=1,shared_xaxes=True,subplot_titles=('<b>Altitude Profile (ft)</b>','<b>Engine Health Degradation Index (%)</b>'))
@@ -677,4 +639,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-```
