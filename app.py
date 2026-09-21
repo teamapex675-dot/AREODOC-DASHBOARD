@@ -14,13 +14,13 @@ warnings.filterwarnings("ignore")
 # PAGE CONFIGURATION
 # ============================================================
 st.set_page_config(
-    page_title="AeroTwin – Digital Twin & AI Copilot",
+    page_title="AeroTwin – Digital Twin Dashboard",
     page_icon="🚁",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# High-Contrast Clean Theme CSS
+# High contrast styling
 st.markdown("""
 <style>
     .stApp { 
@@ -69,7 +69,7 @@ st.markdown("""
     }
     .stTabs [data-baseweb="tab"] {
         border-radius: 8px; 
-        padding: 8px 18px; 
+        padding: 8px 20px; 
         color: #334155 !important; 
         font-weight: 700 !important;
     }
@@ -131,31 +131,47 @@ st.markdown("""
         border-left: 6px solid !important;
         font-weight: 500 !important;
     }
-    .alert-green { background: #ECFDF5 !important; border-color: #059669 !important; color: #064E3B !important; }
-    .alert-green * { color: #064E3B !important; }
-    .alert-yellow { background: #FEFCE8 !important; border-color: #D97706 !important; color: #78350F !important; }
-    .alert-yellow * { color: #78350F !important; }
-    .alert-orange { background: #FFF7ED !important; border-color: #EA580C !important; color: #7C2D12 !important; }
-    .alert-orange * { color: #7C2D12 !important; }
-    .alert-red { background: #FEF2F2 !important; border-color: #DC2626 !important; color: #7F1D1D !important; }
-    .alert-red * { color: #7F1D1D !important; }
-    .alert-blue { background: #EFF6FF !important; border-color: #2563EB !important; color: #1E3A8A !important; }
-    .alert-blue * { color: #1E3A8A !important; }
-
-    /* Chat bubble high contrast */
-    [data-testid="stChatMessage"] {
-        background-color: #FFFFFF !important;
-        border: 1px solid #CBD5E1 !important;
-        border-radius: 12px !important;
-        margin-bottom: 10px !important;
+    .alert-green { 
+        background: #ECFDF5 !important; 
+        border-color: #059669 !important; 
+        color: #064E3B !important; 
     }
+    .alert-green * { color: #064E3B !important; }
+
+    .alert-yellow { 
+        background: #FEFCE8 !important; 
+        border-color: #D97706 !important; 
+        color: #78350F !important; 
+    }
+    .alert-yellow * { color: #78350F !important; }
+
+    .alert-orange { 
+        background: #FFF7ED !important; 
+        border-color: #EA580C !important; 
+        color: #7C2D12 !important; 
+    }
+    .alert-orange * { color: #7C2D12 !important; }
+
+    .alert-red { 
+        background: #FEF2F2 !important; 
+        border-color: #DC2626 !important; 
+        color: #7F1D1D !important; 
+    }
+    .alert-red * { color: #7F1D1D !important; }
+
+    .alert-blue { 
+        background: #EFF6FF !important; 
+        border-color: #2563EB !important; 
+        color: #1E3A8A !important; 
+    }
+    .alert-blue * { color: #1E3A8A !important; }
 
     #MainMenu, footer, header { visibility: hidden; }
 </style>
 """, unsafe_allow_html=True)
 
 # ============================================================
-# DOMAIN MODELS & ENUMS
+# DOMAIN MODELS
 # ============================================================
 class FaultType(Enum):
     HEALTHY = "Healthy (Nominal Operation)"
@@ -185,7 +201,7 @@ class EngineState:
     engine_hours: float = 0.0
 
 # ============================================================
-# PHYSICS & DIGITAL TWIN SIMULATOR
+# PHYSICS & DIGITAL TWIN LOGIC
 # ============================================================
 class PhysicsModel:
     def __init__(self):
@@ -348,101 +364,7 @@ class AIEngine:
         else: return "CRITICAL"
 
 # ============================================================
-# CHATBOT INTELLIGENCE ENGINE
-# ============================================================
-def generate_ai_copilot_response(user_query: str, state: EngineState, fault: FaultType, 
-                                health: float, conf: float, residuals: dict, 
-                                rl: float, rh: float, mrisk: str, cyl: int, alt: float, thr: float) -> str:
-    q = user_query.lower()
-
-    if any(k in q for k in ["status", "overview", "summary", "how is", "health"]):
-        return (
-            f"### 📋 Current Engine Health Summary\n"
-            f"- **Overall Health Index:** `{health}%`\n"
-            f"- **Active Diagnosis:** **{fault.value}** (AI Confidence: `{conf*100:.1f}%`)\n"
-            f"- **Mission Risk Level:** `{mrisk}`\n"
-            f"- **Estimated RUL:** `{rl} to {rh} flight hours`\n"
-            f"- **Operating Regime:** Throttle `{thr}%` at Altitude `{alt:,} ft`\n\n"
-            f"{'✅ All physical subsystems are matching expected thermodynamics perfectly.' if fault == FaultType.HEALTHY else '⚠️ Digital Twin residuals indicate abnormal physical deviations. Check the Engineer tab for residual breakdowns.'}"
-        )
-
-    elif any(k in q for k in ["fault", "anomaly", "diagnos", "evidence", "why", "cause"]):
-        if fault == FaultType.HEALTHY:
-            return "✅ **No anomalies detected.** Observed thermodynamic values match the physics model within ±1.5% normal variance."
-        
-        ev_items = [f"- **{k}:** `{v*100:.1f}% deviation`" for k, v in residuals.items() if v > 0.05 and not k.startswith("cht_") and not k.startswith("egt_")]
-        return (
-            f"### 🔍 AI Diagnostic Evidence for: {fault.value}\n"
-            f"**Localized Target:** Subsystem **Cylinder {cyl}**\n\n"
-            f"**Observed Physics Residuals:**\n"
-            f"- **Cylinder {cyl} EGT Deviation:** `+{residuals.get(f'egt_cyl_{cyl}', 0)*100:.1f}%`\n"
-            f"- **Cylinder {cyl} CHT Deviation:** `+{residuals.get(f'cht_cyl_{cyl}', 0)*100:.1f}%`\n"
-            + "\n".join(ev_items[:3]) + "\n\n"
-            f"💡 **Conclusion:** Physical telemetry deviates significantly from the physics twin model, indicating early stage mechanical/thermal degradation prior to threshold alarms."
-        )
-
-    elif any(k in q for k in ["maintenance", "repair", "fix", "checklist", "sop", "action"]):
-        if fault == FaultType.INJECTOR_DEGRADATION:
-            return (
-                f"### 🛠️ Maintenance Directive: Injector Degradation (Cylinder {cyl})\n"
-                f"1. **Borescope Inspection:** Inspect fuel injector nozzle #{cyl} for carbon fouling or spray orifice erosion.\n"
-                f"2. **Fuel Pressure Test:** Verify rail pressure (nominal 42 psi) and ultrasonic cleaner cycle.\n"
-                f"3. **ECU Calibration:** Check pulse width modulation timing on Channel #{cyl}.\n"
-                f"4. **Estimated Downtime:** ~2.5 operating hours."
-            )
-        elif fault == FaultType.MISFIRE:
-            return (
-                f"### 🛠️ Maintenance Directive: Ignition / Misfire (Cylinder {cyl})\n"
-                f"1. Inspect spark plug electrode gap and magneto lead harness on Cylinder {cyl}.\n"
-                f"2. Perform differential compression check (minimum 70/80 psi).\n"
-                f"3. Check for secondary coil breakdown under load."
-            )
-        elif fault == FaultType.LUBRICATION_PROBLEM:
-            return (
-                f"### 🛠️ Maintenance Directive: Lubrication System\n"
-                f"1. **Immediate Filter Cut:** Inspect oil filter element for ferrous/non-ferrous swarf.\n"
-                f"2. **Relief Valve:** Inspect pressure relief valve spring seating.\n"
-                f"3. **Scavenge Pump:** Inspect oil scavenging return lines for thermal coking."
-            )
-        else:
-            return (
-                f"### 🛠️ Standard Maintenance Directive\n"
-                f"1. Perform 50-hour scheduled inspection according to MALE UAV Aero Engine Manual.\n"
-                f"2. Download ECU non-volatile memory logs for post-flight physics twin model comparison."
-            )
-
-    elif any(k in q for k in ["extend", "mission", "reach", "can we", "risk", "rtb"]):
-        if mrisk in ["HIGH", "CRITICAL"]:
-            return (
-                f"🚨 **Advisory: DO NOT EXTEND MISSION.**\n\n"
-                f"Current RUL is restricted to **{rl} hrs**, and the degradation slope with **{fault.value}** increases thermal stress exponentially. "
-                f"Recommend immediate RTB (Return to Base) or throttled cruise descent."
-            )
-        else:
-            return (
-                f"✅ **Mission Extension Feasible.**\n\n"
-                f"Engine health is `{health}%` with an RUL margin of `{rl} - {rh} hours`. "
-                f"A 1-2 hour extension will keep end-of-mission health above the critical 60% safety threshold."
-            )
-
-    elif any(k in q for k in ["twin", "physics", "model", "how it works", "drdo"]):
-        return (
-            "### 🧬 Digital Twin Hybrid Architecture\n"
-            "Unlike traditional black-box AI, **AeroTwin** uses a hybrid physics-AI engine:\n"
-            "1. **Physics Twin:** Computes thermodynamic equilibrium based on outside air temp, altitude, and throttle load.\n"
-            "2. **Residual Extraction:** Isolates mechanical degradation from environmental transients: `Residual = Actual − Expected`.\n"
-            "3. **XAI Diagnostic:** Explains the failure mode using multi-sensor physics evidence."
-        )
-
-    else:
-        return (
-            f"🤖 **AeroTwin Copilot:** I am continuously monitoring telemetry for this UAV engine. "
-            f"Currently, health is at **{health}%** with **{fault.value}** detected. "
-            f"You can ask me about **maintenance checklists**, **diagnostic evidence**, **RUL estimations**, or **mission extension safety**!"
-        )
-
-# ============================================================
-# CHARTS & VISUALIZATIONS
+# CHARTS
 # ============================================================
 def gauge(val, title):
     c = "#059669" if val>=90 else "#D97706" if val>=75 else "#EA580C" if val>=60 else "#DC2626"
@@ -539,10 +461,9 @@ def radar_chart(s, e):
     return fig
 
 # ============================================================
-# MAIN APPLICATION
+# MAIN
 # ============================================================
 def main():
-    # Sidebar
     with st.sidebar:
         st.markdown("## 🚁 AeroTwin Core")
         st.markdown('<p style="color:#334155;font-weight:600;font-size:0.9rem;">Digital Twin Engine Health Monitor<br>DRDO / SIH 2026 – PS-8</p>', unsafe_allow_html=True)
@@ -569,7 +490,6 @@ def main():
         alt = st.slider("Altitude (ft)", 0, 30000, 15000, 1000)
         mhrs = st.slider("Mission Time Remaining (hrs)", 0.5, 8.0, 3.0, 0.5)
 
-    # Simulator execution
     sim = EngineSimulator(); sim.set_fault(ft, sev, cyl)
     ai = AIEngine(); oat = 15 - alt*0.002
     state = sim.generate(throttle=thr, altitude=alt, oat=oat, airspeed=120+(thr-70)*2)
@@ -593,13 +513,11 @@ def main():
         hh.append(ai.health(ai.residuals(ts)))
     hdf['health'] = hh
 
-    # Main Header
     st.markdown('<div style="text-align:center;padding:5px 0 15px 0;">'
         '<h1 style="color:#0F172A;font-weight:900;font-size:2rem;margin-bottom:2px;">🚁 Aero Piston Engine Digital Twin</h1>'
         '<p style="color:#334155;font-weight:600;font-size:1rem;">Real-Time Health Monitoring • Physics Residuals • AI Diagnostics</p></div>',
         unsafe_allow_html=True)
 
-    # Status Bar
     rc = {'LOW':'#059669','MEDIUM':'#D97706','HIGH':'#EA580C','CRITICAL':'#DC2626'}
     rb = {'LOW':'#ECFDF5','MEDIUM':'#FEFCE8','HIGH':'#FFF7ED','CRITICAL':'#FEF2F2'}
     re = {'LOW':'🟢','MEDIUM':'🟡','HIGH':'🟠','CRITICAL':'🔴'}
@@ -610,17 +528,8 @@ def main():
         f'<span style="color:#0F172A;font-weight:600;font-size:0.95rem;">Health: <b>{health}%</b> &nbsp;|&nbsp; Diagnostic: <b>{fault.value}</b> &nbsp;|&nbsp; '
         f'AI Confidence: <b>{conf*100:.0f}%</b> &nbsp;|&nbsp; RUL: <b>{rl}-{rh}h</b> &nbsp;|&nbsp; Alt: <b>{alt:,}ft</b></span></div>', unsafe_allow_html=True)
 
-    # 6 TABS (Includes all 5 existing tabs + NEW AI Copilot Tab)
-    t1, t2, t3, t4, t5, t6 = st.tabs([
-        "👨‍✈️ Pilot View",
-        "👨‍🔧 Engineer View",
-        "🧬 Digital Twin",
-        "🛫 Mission Risk",
-        "🔁 Replay",
-        "💬 AI Copilot"
-    ])
+    t1, t2, t3, t4, t5 = st.tabs(["👨‍✈️ Pilot View","👨‍🔧 Engineer View","🧬 Digital Twin","🛫 Mission Risk","🔁 Replay"])
 
-    # 👨‍✈️ PILOT TAB
     with t1:
         c1,c2,c3 = st.columns([1.2,1,1])
         with c1:
@@ -645,7 +554,6 @@ def main():
             st.metric("Flight Altitude", f"{alt:,} ft")
             st.markdown('</div>', unsafe_allow_html=True)
 
-    # 👨‍🔧 ENGINEER TAB
     with t2:
         m1,m2,m3,m4,m5,m6 = st.columns(6)
         m1.metric("RPM", f"{state.rpm:.0f}", f"{state.rpm-exp['rpm']:+.0f}")
@@ -675,7 +583,6 @@ def main():
             st.plotly_chart(ts_chart(hdf,['oil_pressure','oil_temperature'],'Lubrication System Dynamics','Value'), use_container_width=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
-    # 🧬 DIGITAL TWIN TAB
     with t3:
         dt1, dt2 = st.columns(2)
         with dt1:
@@ -690,7 +597,6 @@ def main():
                 '3. <b>AI Anomaly Classifier:</b> Evaluates multi-parameter residual patterns to identify incipient faults before threshold alerts are triggered.'
                 '</p></div>', unsafe_allow_html=True)
 
-    # 🛫 MISSION RISK TAB
     with t4:
         mr1, mr2 = st.columns(2)
         with mr1:
@@ -719,7 +625,6 @@ def main():
                 st.markdown('<div class="alert-card alert-green">✅ <b>Extension Safe:</b> Engine degradation remains within acceptable risk tolerance.</div>', unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
-    # 🔁 REPLAY TAB
     with t5:
         st.markdown('<div class="info-box"><p class="section-header">🛫 Mission Timeline & Anomaly Detection Replay</p>', unsafe_allow_html=True)
         pf = make_subplots(rows=2,cols=1,shared_xaxes=True,subplot_titles=('<b>Altitude Profile (ft)</b>','<b>Engine Health Degradation Index (%)</b>'))
@@ -731,55 +636,6 @@ def main():
         pf.update_yaxes(showgrid=True,gridcolor='#E2E8F0',linecolor='#94A3B8',tickfont={'color':'#0F172A'})
         st.plotly_chart(pf, use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
-
-    # 💬 NEW TAB 6: AI COPILOT / CHATBOX
-    with t6:
-        st.markdown('<div class="info-box"><p class="section-header">🤖 AeroTwin AI Flight Copilot & Maintenance Advisory</p>'
-            '<p style="font-size:0.95rem;color:#475569;">Ask questions about real-time engine telemetry, physics residuals, RUL projections, or standard maintenance procedures.</p></div>', unsafe_allow_html=True)
-
-        # Initialize session chat history
-        if "messages" not in st.session_state:
-            st.session_state.messages = [
-                {"role": "assistant", "content": "👋 Greetings Engineer! I am the **AeroTwin Copilot**. I have access to your live engine telemetry and digital twin physics residuals. How can I assist you with diagnostic evaluation or mission planning today?"}
-            ]
-
-        # Quick Prompt Buttons
-        st.markdown("##### ⚡ Quick Diagnostic Queries:")
-        q1, q2, q3, q4 = st.columns(4)
-        quick_query = None
-        if q1.button("🔍 Explain Active Anomaly"):
-            quick_query = "Explain the active anomaly and diagnostic evidence."
-        if q2.button("🛠️ Required Maintenance"):
-            quick_query = "What is the recommended maintenance procedure?"
-        if q3.button("⚠️ Mission Extension Safe?"):
-            quick_query = "Can we safely extend this mission by 2 hours?"
-        if q4.button("📊 Physics Twin vs Telemetry"):
-            quick_query = "Explain how the physics model and residuals detect this fault."
-
-        # Display Chat Messages
-        for message in st.session_state.messages:
-            with st.chat_message(message["role"]):
-                st.markdown(message["content"])
-
-        # Process user input or quick query button
-        user_input = st.chat_input("Type your question to the AI Copilot (e.g., 'What is causing the EGT imbalance?')...")
-        prompt = quick_query if quick_query else user_input
-
-        if prompt:
-            # Append User message
-            st.session_state.messages.append({"role": "user", "content": prompt})
-            with st.chat_message("user"):
-                st.markdown(prompt)
-
-            # Generate AI Response using current real-time state
-            response_text = generate_ai_copilot_response(
-                prompt, state, fault, health, conf, res, rl, rh, mrisk, cyl, alt, thr
-            )
-
-            # Append Assistant response
-            st.session_state.messages.append({"role": "assistant", "content": response_text})
-            with st.chat_message("assistant"):
-                st.markdown(response_text)
 
 if __name__ == "__main__":
     main()
