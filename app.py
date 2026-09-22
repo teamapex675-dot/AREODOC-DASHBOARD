@@ -5,22 +5,22 @@ import numpy as np
 import pandas as pd
 from datetime import datetime, timedelta
 from dataclasses import dataclass, field
-from typing import List
+from typing import List, Dict, Tuple
 from enum import Enum
 import warnings
 warnings.filterwarnings("ignore")
 
 # ============================================================
-# PAGE CONFIGURATION
+# 1. PAGE CONFIG & THEME SETUP (FRONTEND UI)
 # ============================================================
 st.set_page_config(
-    page_title="AeroTwin – Digital Twin Dashboard",
+    page_title="AeroTwin – Digital Twin System",
     page_icon="🚁",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# High contrast styling
+# High-contrast crisp styling
 st.markdown("""
 <style>
     .stApp { 
@@ -69,7 +69,7 @@ st.markdown("""
     }
     .stTabs [data-baseweb="tab"] {
         border-radius: 8px; 
-        padding: 8px 20px; 
+        padding: 8px 18px; 
         color: #334155 !important; 
         font-weight: 700 !important;
     }
@@ -131,47 +131,21 @@ st.markdown("""
         border-left: 6px solid !important;
         font-weight: 500 !important;
     }
-    .alert-green { 
-        background: #ECFDF5 !important; 
-        border-color: #059669 !important; 
-        color: #064E3B !important; 
-    }
+    .alert-green { background: #ECFDF5 !important; border-color: #059669 !important; color: #064E3B !important; }
     .alert-green * { color: #064E3B !important; }
-
-    .alert-yellow { 
-        background: #FEFCE8 !important; 
-        border-color: #D97706 !important; 
-        color: #78350F !important; 
-    }
+    .alert-yellow { background: #FEFCE8 !important; border-color: #D97706 !important; color: #78350F !important; }
     .alert-yellow * { color: #78350F !important; }
-
-    .alert-orange { 
-        background: #FFF7ED !important; 
-        border-color: #EA580C !important; 
-        color: #7C2D12 !important; 
-    }
+    .alert-orange { background: #FFF7ED !important; border-color: #EA580C !important; color: #7C2D12 !important; }
     .alert-orange * { color: #7C2D12 !important; }
-
-    .alert-red { 
-        background: #FEF2F2 !important; 
-        border-color: #DC2626 !important; 
-        color: #7F1D1D !important; 
-    }
+    .alert-red { background: #FEF2F2 !important; border-color: #DC2626 !important; color: #7F1D1D !important; }
     .alert-red * { color: #7F1D1D !important; }
-
-    .alert-blue { 
-        background: #EFF6FF !important; 
-        border-color: #2563EB !important; 
-        color: #1E3A8A !important; 
-    }
-    .alert-blue * { color: #1E3A8A !important; }
 
     #MainMenu, footer, header { visibility: hidden; }
 </style>
 """, unsafe_allow_html=True)
 
 # ============================================================
-# DOMAIN MODELS
+# 2. BACKEND LAYER: MODELS & STATE DEFINITION
 # ============================================================
 class FaultType(Enum):
     HEALTHY = "Healthy (Nominal Operation)"
@@ -201,7 +175,7 @@ class EngineState:
     engine_hours: float = 0.0
 
 # ============================================================
-# PHYSICS & DIGITAL TWIN LOGIC
+# 3. BACKEND LAYER: PHYSICS MODEL & TELEMETRY ENGINE
 # ============================================================
 class PhysicsModel:
     def __init__(self):
@@ -211,7 +185,7 @@ class PhysicsModel:
             'vib': 0.15, 'bat': 28.0,
         }
 
-    def expected(self, throttle, altitude, oat):
+    def expected(self, throttle: float, altitude: float, oat: float) -> Dict:
         tf = throttle / 75.0
         af = 1.0 - (altitude / 50000.0) * 0.15
         tempf = 1.0 + (oat - 15.0) / 200.0
@@ -234,12 +208,12 @@ class EngineSimulator:
         self.fault_cylinder = 1
         self.engine_hours = 342.5
 
-    def set_fault(self, ft, sev=0.3, cyl=2):
+    def set_fault(self, ft: FaultType, sev: float = 0.3, cyl: int = 2):
         self.fault_type = ft
         self.fault_severity = np.clip(sev, 0, 1)
         self.fault_cylinder = cyl - 1
 
-    def generate(self, throttle=70, altitude=15000, oat=-5, airspeed=120, t_off=0):
+    def generate(self, throttle=70, altitude=15000, oat=-5, airspeed=120, t_off=0) -> EngineState:
         exp = self.physics.expected(throttle, altitude, oat)
         s = EngineState()
         s.timestamp = datetime.now() + timedelta(seconds=t_off)
@@ -272,7 +246,7 @@ class EngineSimulator:
             s.vibration += 0.4*sv
         return s
 
-    def generate_history(self, dur_min=120, rate=10, fault_pct=0.6):
+    def generate_history(self, dur_min=120, rate=10, fault_pct=0.6) -> pd.DataFrame:
         n = (dur_min * 60) // rate
         fs = int(n * fault_pct)
         records = []
@@ -289,23 +263,26 @@ class EngineSimulator:
                 self.fault_severity = min(((i-fs)/(n-fs))*0.8, 0.8)
             else:
                 self.fault_severity = 0.0
-            st = self.generate(throttle=thr, altitude=alt, oat=-5+alt*(-0.002), airspeed=120+(thr-70)*2, t_off=t)
+            st_data = self.generate(throttle=thr, altitude=alt, oat=-5+alt*(-0.002), airspeed=120+(thr-70)*2, t_off=t)
             records.append({
-                'time_sec': t, 'rpm': st.rpm,
-                'cht_1': st.cht[0], 'cht_2': st.cht[1], 'cht_3': st.cht[2], 'cht_4': st.cht[3],
-                'egt_1': st.egt[0], 'egt_2': st.egt[1], 'egt_3': st.egt[2], 'egt_4': st.egt[3],
-                'oil_pressure': st.oil_pressure, 'oil_temperature': st.oil_temperature,
-                'fuel_flow': st.fuel_flow, 'vibration': st.vibration,
-                'altitude': st.altitude, 'fault_severity': self.fault_severity,
+                'time_sec': t, 'rpm': st_data.rpm,
+                'cht_1': st_data.cht[0], 'cht_2': st_data.cht[1], 'cht_3': st_data.cht[2], 'cht_4': st_data.cht[3],
+                'egt_1': st_data.egt[0], 'egt_2': st_data.egt[1], 'egt_3': st_data.egt[2], 'egt_4': st_data.egt[3],
+                'oil_pressure': st_data.oil_pressure, 'oil_temperature': st_data.oil_temperature,
+                'fuel_flow': st_data.fuel_flow, 'vibration': st_data.vibration,
+                'altitude': st_data.altitude, 'fault_severity': self.fault_severity,
             })
         return pd.DataFrame(records)
 
+# ============================================================
+# 4. BACKEND LAYER: AI DIAGNOSTICS & RESIDUAL PROCESSING
+# ============================================================
 class AIEngine:
     def __init__(self):
         self.physics = PhysicsModel()
         self.threshold = 0.15
 
-    def residuals(self, s):
+    def residuals(self, s: EngineState) -> Dict:
         e = self.physics.expected(s.throttle, s.altitude, s.oat)
         r = {
             'rpm': abs(s.rpm-e['rpm'])/max(e['rpm'],1),
@@ -321,7 +298,7 @@ class AIEngine:
             r[f'cht_cyl_{i+1}'] = abs(s.cht[i]-e['cht'][i])/max(abs(e['cht'][i]),1)
         return r
 
-    def classify(self, r):
+    def classify(self, r: Dict) -> Tuple[FaultType, float, Dict]:
         scores = {ft: 0.0 for ft in FaultType}
         evidence = {}
         for i in range(4):
@@ -347,26 +324,26 @@ class AIEngine:
         best = max(scores, key=scores.get)
         return best, scores[best], evidence
 
-    def health(self, r):
+    def health(self, r: Dict) -> float:
         p = r.get('egt_max',0)*25 + r.get('cht_max',0)*20 + r.get('oil_pressure',0)*20 + r.get('vibration',0)*15 + r.get('fuel_flow',0)*10 + r.get('rpm',0)*10
         return round(max(0, min(100, 100-p)), 1)
 
-    def rul(self, h, dr=0.5):
+    def rul(self, h: float, dr: float = 0.5) -> Tuple[float, float]:
         if dr <= 0.01: return 200.0, 250.0
         rem = h - 60.0
         if rem <= 0: return 0.0, 0.0
         return round(rem/(dr*1.3),1), round(rem/(dr*0.7),1)
 
-    def mission_risk(self, h, rl, mhrs):
+    def mission_risk(self, h: float, rl: float, mhrs: float) -> str:
         if h >= 90 and rl > mhrs*2: return "LOW"
         elif h >= 75 and rl > mhrs: return "MEDIUM"
         elif h >= 60: return "HIGH"
         else: return "CRITICAL"
 
 # ============================================================
-# CHARTS
+# 5. FRONTEND CHARTS & VISUALIZATIONS
 # ============================================================
-def gauge(val, title):
+def gauge(val: float, title: str):
     c = "#059669" if val>=90 else "#D97706" if val>=75 else "#EA580C" if val>=60 else "#DC2626"
     fig = go.Figure(go.Indicator(
         mode="gauge+number", 
@@ -388,7 +365,7 @@ def gauge(val, title):
     fig.update_layout(height=190, margin=dict(l=15,r=15,t=35,b=10), paper_bgcolor='rgba(0,0,0,0)')
     return fig
 
-def cyl_chart(cht, egt):
+def cyl_chart(cht: List[float], egt: List[float]):
     cys = ['Cyl 1','Cyl 2','Cyl 3','Cyl 4']
     fig = make_subplots(rows=1,cols=2,subplot_titles=('<b>CHT (°C)</b>','<b>EGT (°C)</b>'),horizontal_spacing=0.12)
     cc = ['#DC2626' if v>220 else '#EA580C' if v>200 else '#4F46E5' for v in cht]
@@ -404,7 +381,7 @@ def cyl_chart(cht, egt):
     fig.update_yaxes(showgrid=True, gridcolor='#E2E8F0', linecolor='#94A3B8', tickfont={'color':'#0F172A', 'size':11})
     return fig
 
-def ts_chart(df, cols, title, yl=""):
+def ts_chart(df: pd.DataFrame, cols: List[str], title: str, yl: str = ""):
     fig = go.Figure()
     colors = ['#4F46E5','#059669','#DC2626','#EA580C','#7C3AED','#0284C7']
     for i,c in enumerate(cols):
@@ -421,7 +398,7 @@ def ts_chart(df, cols, title, yl=""):
     fig.update_yaxes(showgrid=True,gridcolor='#E2E8F0',linecolor='#94A3B8',tickfont={'color':'#0F172A'})
     return fig
 
-def res_chart(r):
+def res_chart(r: Dict):
     keys = ['rpm','egt_max','cht_max','oil_pressure','oil_temperature','fuel_flow','vibration']
     labels = ['RPM','EGT','CHT','Oil P','Oil T','Fuel','Vib']
     vals = [r.get(k,0)*100 for k in keys]
@@ -437,7 +414,7 @@ def res_chart(r):
     fig.update_yaxes(showgrid=True,gridcolor='#E2E8F0',linecolor='#94A3B8',tickfont={'color':'#0F172A'})
     return fig
 
-def radar_chart(s, e):
+def radar_chart(s: EngineState, e: Dict):
     params = ['RPM','CHT Avg','EGT Avg','Oil Press','Oil Temp','Fuel Flow']
     av = [s.rpm, np.mean(s.cht), np.mean(s.egt), s.oil_pressure, s.oil_temperature, s.fuel_flow]
     ev = [e['rpm'], np.mean(e['cht']), np.mean(e['egt']), e['oil_p'], e['oil_t'], e['fuel']]
@@ -461,9 +438,10 @@ def radar_chart(s, e):
     return fig
 
 # ============================================================
-# MAIN
+# 6. APPLICATION CONTROLLER & VIEW ROUTER
 # ============================================================
 def main():
+    # Sidebar: Backend Controls
     with st.sidebar:
         st.markdown("## 🚁 AeroTwin Core")
         st.markdown('<p style="color:#334155;font-weight:600;font-size:0.9rem;">Digital Twin Engine Health Monitor<br>DRDO / SIH 2026 – PS-8</p>', unsafe_allow_html=True)
@@ -490,34 +468,49 @@ def main():
         alt = st.slider("Altitude (ft)", 0, 30000, 15000, 1000)
         mhrs = st.slider("Mission Time Remaining (hrs)", 0.5, 8.0, 3.0, 0.5)
 
-    sim = EngineSimulator(); sim.set_fault(ft, sev, cyl)
-    ai = AIEngine(); oat = 15 - alt*0.002
-    state = sim.generate(throttle=thr, altitude=alt, oat=oat, airspeed=120+(thr-70)*2)
-    phys = PhysicsModel(); exp = phys.expected(thr, alt, oat)
+    # Initialize Backend Pipeline
+    sim = EngineSimulator()
+    sim.set_fault(ft, sev, cyl)
+    ai = AIEngine()
+    oat = 15 - alt * 0.002
+
+    # Compute Telemetry & Residuals
+    state = sim.generate(throttle=thr, altitude=alt, oat=oat, airspeed=120 + (thr - 70) * 2)
+    phys = PhysicsModel()
+    exp = phys.expected(thr, alt, oat)
     res = ai.residuals(state)
     fault, conf, evidence = ai.classify(res)
     health = ai.health(res)
-    rl, rh = ai.rul(health, sev*2)
+    rl, rh = ai.rul(health, sev * 2)
     mrisk = ai.mission_risk(health, rl, mhrs)
 
-    sh = EngineSimulator(); sh.set_fault(ft, sev, cyl)
+    # Historical Mission Simulation
+    sh = EngineSimulator()
+    sh.set_fault(ft, sev, cyl)
     hdf = sh.generate_history(120, 10)
     hh = []
     for _, row in hdf.iterrows():
-        ts = EngineState(); ts.rpm=row['rpm']
-        ts.cht=[row['cht_1'],row['cht_2'],row['cht_3'],row['cht_4']]
-        ts.egt=[row['egt_1'],row['egt_2'],row['egt_3'],row['egt_4']]
-        ts.oil_pressure=row['oil_pressure']; ts.oil_temperature=row['oil_temperature']
-        ts.fuel_flow=row['fuel_flow']; ts.vibration=row['vibration']
-        ts.altitude=row['altitude']; ts.throttle=70; ts.oat=-5+row['altitude']*(-0.002)
+        ts = EngineState()
+        ts.rpm = row['rpm']
+        ts.cht = [row['cht_1'], row['cht_2'], row['cht_3'], row['cht_4']]
+        ts.egt = [row['egt_1'], row['egt_2'], row['egt_3'], row['egt_4']]
+        ts.oil_pressure = row['oil_pressure']
+        ts.oil_temperature = row['oil_temperature']
+        ts.fuel_flow = row['fuel_flow']
+        ts.vibration = row['vibration']
+        ts.altitude = row['altitude']
+        ts.throttle = 70
+        ts.oat = -5 + row['altitude'] * (-0.002)
         hh.append(ai.health(ai.residuals(ts)))
     hdf['health'] = hh
 
+    # Main Header
     st.markdown('<div style="text-align:center;padding:5px 0 15px 0;">'
         '<h1 style="color:#0F172A;font-weight:900;font-size:2rem;margin-bottom:2px;">🚁 Aero Piston Engine Digital Twin</h1>'
         '<p style="color:#334155;font-weight:600;font-size:1rem;">Real-Time Health Monitoring • Physics Residuals • AI Diagnostics</p></div>',
         unsafe_allow_html=True)
 
+    # Status Bar
     rc = {'LOW':'#059669','MEDIUM':'#D97706','HIGH':'#EA580C','CRITICAL':'#DC2626'}
     rb = {'LOW':'#ECFDF5','MEDIUM':'#FEFCE8','HIGH':'#FFF7ED','CRITICAL':'#FEF2F2'}
     re = {'LOW':'🟢','MEDIUM':'🟡','HIGH':'🟠','CRITICAL':'🔴'}
@@ -528,21 +521,29 @@ def main():
         f'<span style="color:#0F172A;font-weight:600;font-size:0.95rem;">Health: <b>{health}%</b> &nbsp;|&nbsp; Diagnostic: <b>{fault.value}</b> &nbsp;|&nbsp; '
         f'AI Confidence: <b>{conf*100:.0f}%</b> &nbsp;|&nbsp; RUL: <b>{rl}-{rh}h</b> &nbsp;|&nbsp; Alt: <b>{alt:,}ft</b></span></div>', unsafe_allow_html=True)
 
-    t1, t2, t3, t4, t5 = st.tabs(["👨‍✈️ Pilot View","👨‍🔧 Engineer View","🧬 Digital Twin","🛫 Mission Risk","🔁 Replay"])
+    # 5 FRONTEND TABS (Pilot, Engineer, Twin, Risk, Replay)
+    t1, t2, t3, t4, t5 = st.tabs([
+        "👨‍✈️ Pilot View",
+        "👨‍🔧 Engineer View",
+        "🧬 Digital Twin",
+        "🛫 Mission Risk",
+        "🔁 Replay"
+    ])
 
+    # 👨‍✈️ PILOT TAB
     with t1:
-        c1,c2,c3 = st.columns([1.2,1,1])
+        c1, c2, c3 = st.columns([1.2, 1, 1])
         with c1:
-            hc = '#059669' if health>=90 else '#D97706' if health>=75 else '#EA580C' if health>=60 else '#DC2626'
+            hc = '#059669' if health >= 90 else '#D97706' if health >= 75 else '#EA580C' if health >= 60 else '#DC2626'
             st.markdown(f'<div class="health-card"><p>OVERALL ENGINE HEALTH</p><h2 style="color:{hc};">{health}%</h2>'
                 f'<p>Engine Accumulated Time: <b>{state.engine_hours:.1f} hrs</b></p></div>', unsafe_allow_html=True)
-            st.plotly_chart(gauge(health,"Health Score"), use_container_width=True)
+            st.plotly_chart(gauge(health, "Health Score"), use_container_width=True)
         with c2:
             st.markdown('<div class="info-box"><p class="section-header">⚠️ Warning & Diagnostics</p>', unsafe_allow_html=True)
             if fault == FaultType.HEALTHY:
                 st.markdown('<div class="alert-card alert-green">✅ <b>All Engine Parameters Nominal</b><br>No corrective action required.</div>', unsafe_allow_html=True)
             else:
-                ac = 'alert-red' if mrisk=='CRITICAL' else 'alert-orange' if mrisk=='HIGH' else 'alert-yellow'
+                ac = 'alert-red' if mrisk == 'CRITICAL' else 'alert-orange' if mrisk == 'HIGH' else 'alert-yellow'
                 st.markdown(f'<div class="alert-card {ac}"><strong>⚠️ {fault.value}</strong><br>'
                     f'📍 Target Subsystem: <b>Cylinder {cyl}</b><br>🤖 AI Confidence: <b>{conf*100:.0f}%</b><br>⏳ Estimated RUL: <b>{rl}-{rh} operating hrs</b></div>', unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
@@ -554,8 +555,9 @@ def main():
             st.metric("Flight Altitude", f"{alt:,} ft")
             st.markdown('</div>', unsafe_allow_html=True)
 
+    # 👨‍🔧 ENGINEER TAB
     with t2:
-        m1,m2,m3,m4,m5,m6 = st.columns(6)
+        m1, m2, m3, m4, m5, m6 = st.columns(6)
         m1.metric("RPM", f"{state.rpm:.0f}", f"{state.rpm-exp['rpm']:+.0f}")
         m2.metric("Oil Press", f"{state.oil_pressure:.1f} psi", f"{state.oil_pressure-exp['oil_p']:+.1f}")
         m3.metric("Oil Temp", f"{state.oil_temperature:.1f}°C", f"{state.oil_temperature-exp['oil_t']:+.1f}")
@@ -576,13 +578,14 @@ def main():
         tc1, tc2 = st.columns(2)
         with tc1:
             st.markdown('<div class="info-box">', unsafe_allow_html=True)
-            st.plotly_chart(ts_chart(hdf,['egt_1','egt_2','egt_3','egt_4'],'Exhaust Gas Temperatures (EGT) by Cylinder','°C'), use_container_width=True)
+            st.plotly_chart(ts_chart(hdf, ['egt_1', 'egt_2', 'egt_3', 'egt_4'], 'Exhaust Gas Temperatures (EGT) by Cylinder', '°C'), use_container_width=True)
             st.markdown('</div>', unsafe_allow_html=True)
         with tc2:
             st.markdown('<div class="info-box">', unsafe_allow_html=True)
-            st.plotly_chart(ts_chart(hdf,['oil_pressure','oil_temperature'],'Lubrication System Dynamics','Value'), use_container_width=True)
+            st.plotly_chart(ts_chart(hdf, ['oil_pressure', 'oil_temperature'], 'Lubrication System Dynamics', 'Value'), use_container_width=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
+    # 🧬 DIGITAL TWIN TAB
     with t3:
         dt1, dt2 = st.columns(2)
         with dt1:
@@ -597,19 +600,20 @@ def main():
                 '3. <b>AI Anomaly Classifier:</b> Evaluates multi-parameter residual patterns to identify incipient faults before threshold alerts are triggered.'
                 '</p></div>', unsafe_allow_html=True)
 
+    # 🛫 MISSION RISK TAB
     with t4:
         mr1, mr2 = st.columns(2)
         with mr1:
             st.markdown('<div class="info-box"><p class="section-header">⏳ RUL vs Required Mission Endurance</p>', unsafe_allow_html=True)
             rf = go.Figure(go.Bar(
-                x=['RUL (Pessimistic)','RUL (Optimistic)','Mission Remaining'],
-                y=[rl,rh,mhrs],
-                marker_color=['#EA580C','#059669','#4F46E5'],
-                text=[f'<b>{rl}h</b>',f'<b>{rh}h</b>',f'<b>{mhrs}h</b>'],
+                x=['RUL (Pessimistic)', 'RUL (Optimistic)', 'Mission Remaining'],
+                y=[rl, rh, mhrs],
+                marker_color=['#EA580C', '#059669', '#4F46E5'],
+                text=[f'<b>{rl}h</b>', f'<b>{rh}h</b>', f'<b>{mhrs}h</b>'],
                 textposition='outside'
             ))
-            rf.update_layout(height=260,yaxis_title="Flight Hours",margin=dict(l=10,r=10,t=20,b=10),
-                paper_bgcolor='rgba(0,0,0,0)',plot_bgcolor='rgba(0,0,0,0)',font={'color':'#0F172A'})
+            rf.update_layout(height=260, yaxis_title="Flight Hours", margin=dict(l=10, r=10, t=20, b=10),
+                paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font={'color':'#0F172A'})
             rf.update_xaxes(linecolor='#94A3B8', tickfont={'color':'#0F172A', 'weight':600})
             rf.update_yaxes(showgrid=True, gridcolor='#E2E8F0', linecolor='#94A3B8', tickfont={'color':'#0F172A'})
             st.plotly_chart(rf, use_container_width=True)
@@ -617,7 +621,7 @@ def main():
         with mr2:
             st.markdown('<div class="info-box"><p class="section-header">🔮 What-If Mission Extension Simulator</p>', unsafe_allow_html=True)
             se = st.slider("Simulate mission extension (extra hours)", 0.0, 4.0, 1.0, 0.5)
-            ph = max(0, health - (sev*2)*(mhrs+se)*4)
+            ph = max(0, health - (sev * 2) * (mhrs + se) * 4)
             st.metric("Projected Engine Health at Landing", f"{ph:.1f}%")
             if ph < 60:
                 st.markdown('<div class="alert-card alert-red">🔴 <b>Mission Abort Recommended:</b> Projected health at touchdown drops below 60% structural safety threshold.</div>', unsafe_allow_html=True)
@@ -625,15 +629,16 @@ def main():
                 st.markdown('<div class="alert-card alert-green">✅ <b>Extension Safe:</b> Engine degradation remains within acceptable risk tolerance.</div>', unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
+    # 🔁 REPLAY TAB
     with t5:
         st.markdown('<div class="info-box"><p class="section-header">🛫 Mission Timeline & Anomaly Detection Replay</p>', unsafe_allow_html=True)
-        pf = make_subplots(rows=2,cols=1,shared_xaxes=True,subplot_titles=('<b>Altitude Profile (ft)</b>','<b>Engine Health Degradation Index (%)</b>'))
-        pf.add_trace(go.Scatter(x=hdf['time_sec']/60,y=hdf['altitude'],fill='tozeroy',line=dict(color='#4F46E5',width=2.5)),1,1)
-        pf.add_trace(go.Scatter(x=hdf['time_sec']/60,y=hdf['health'],fill='tozeroy',line=dict(color='#059669',width=2.5)),2,1)
+        pf = make_subplots(rows=2, cols=1, shared_xaxes=True, subplot_titles=('<b>Altitude Profile (ft)</b>', '<b>Engine Health Degradation Index (%)</b>'))
+        pf.add_trace(go.Scatter(x=hdf['time_sec']/60, y=hdf['altitude'], fill='tozeroy', line=dict(color='#4F46E5', width=2.5)), 1, 1)
+        pf.add_trace(go.Scatter(x=hdf['time_sec']/60, y=hdf['health'], fill='tozeroy', line=dict(color='#059669', width=2.5)), 2, 1)
         pf.add_vline(x=72, line_dash="dash", line_color="#DC2626", annotation_text="Anomaly Injected (T=72m)", row=1, col=1)
-        pf.update_layout(height=360,margin=dict(l=10,r=10,t=30,b=10),paper_bgcolor='rgba(0,0,0,0)',showlegend=False,font={'color':'#0F172A'})
-        pf.update_xaxes(showgrid=True,gridcolor='#E2E8F0',linecolor='#94A3B8',tickfont={'color':'#0F172A'})
-        pf.update_yaxes(showgrid=True,gridcolor='#E2E8F0',linecolor='#94A3B8',tickfont={'color':'#0F172A'})
+        pf.update_layout(height=360, margin=dict(l=10, r=10, t=30, b=10), paper_bgcolor='rgba(0,0,0,0)', showlegend=False, font={'color':'#0F172A'})
+        pf.update_xaxes(showgrid=True, gridcolor='#E2E8F0', linecolor='#94A3B8', tickfont={'color':'#0F172A'})
+        pf.update_yaxes(showgrid=True, gridcolor='#E2E8F0', linecolor='#94A3B8', tickfont={'color':'#0F172A'})
         st.plotly_chart(pf, use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
